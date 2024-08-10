@@ -1,0 +1,46 @@
+import pandas as pd
+import mysql.connector
+from pandas import ExcelWriter
+
+# Conexão com MySQL
+conn = mysql.connector.connect(
+    host='localhost',
+    user='seu_usuario',
+    password='sua_senha',
+    database='nome_do_banco'
+)
+
+# Leitura dos CSVs
+csv1 = pd.read_csv('vendas_periodo1.csv')
+csv2 = pd.read_csv('vendas_periodo2.csv')
+
+# Combina os dois DataFrames em um único
+csv_combined = pd.concat([csv1, csv2], ignore_index=True)
+
+# Leitura da tabela Vendas do MySQL
+query = "SELECT * FROM Vendas"
+df_mysql = pd.read_sql(query, conn)
+
+# Fechar conexão
+conn.close()
+
+# Comparação de dados
+inconsistencias = csv_combined.merge(df_mysql, on='ID_Venda', how='outer', indicator=True)
+
+# Identifica as inconsistências
+inconsistencias = inconsistencias[inconsistencias['_merge'] != 'both']
+
+# Contar o número de inconsistências
+num_inconsistencias = len(inconsistencias)
+
+# Gerar relatório
+with ExcelWriter('relatorio_inconsistencias.xlsx') as writer:
+    inconsistencias.to_excel(writer, sheet_name='Detalhamento', index=False)
+    resumo = pd.DataFrame({
+        'Número de Inconsistências': [num_inconsistencias],
+        'Possíveis Causas': ['Erros de importação, Erros de inserção manual'],
+        'Sugestões de Correção': ['Revisar os dados faltantes e reinserir no banco']
+    })
+    resumo.to_excel(writer, sheet_name='Resumo', index=False)
+
+print(f"Relatório gerado com sucesso: {num_inconsistencias} inconsistências encontradas.")
